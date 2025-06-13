@@ -1,54 +1,58 @@
 ## Baby Names Dashboard – France (1900–2020)
 
+**App link** → 🌐 [https://baby-names-visualizations-gebranzeina.streamlit.app/](https://baby-names-visualizations-gebranzeina.streamlit.app/)
+
 **Objective**  
-This dashboard provides an interactive exploration of baby name trends in France from 1900 to 2020. It is designed for decision-makers, data analysts, and the general public seeking insights into name popularity, regional dynamics, and gender-based naming patterns.
+The **Baby Names Dashboard – France** is an interactive application that enables exploration of baby name trends across France from 1900 to 2020. Designed for decision-makers, analysts, and curious users, the tool provides powerful filtering, visualization, and insights into historical naming patterns.
 
 ---
 
-## Features and Visualizations
+## 🚀 Features and Visualizations
 
 **1. Trends Over Time**  
-*Visual 1* offers a clean temporal analysis of baby name popularity across France.  
-- Filter by gender  
-- Explore top 10 names, names with significant shifts, or stable trends  
-- Compare multiple names simultaneously  
-- Gain insights such as peak popularity year and birth counts
+Visual 1 provides a clear temporal analysis of baby name popularity in France:
+- Filter by gender (Boys / Girls / All)
+- Apply smart filters: Top 10, Significant Changes, or Stable Names
+- Compare multiple names over time
+- View metrics like peak popularity year and number of births
 
 **2. Map by Department** *(coming soon)*  
-*Visual 2* will display a geographical heatmap of name popularity by French department.  
-- Filter by gender and year  
-- Highlight the most popular names regionally
+A regional heatmap to explore:
+- Most popular names by department
+- Gender and year filters
+- Regional comparisons and anomalies
 
 **3. Gender Effect** *(coming soon)*  
-*Visual 3* will focus on how naming choices vary across genders.  
-- Compare popularity curves  
-- Explore unisex trends and strong gender splits
+Insights into how names evolve across genders:
+- Male vs Female name trends
+- Identify unisex names
+- Contrast naming habits over decades
 
 ---
 
-## Data Preprocessing
+## 🧹 Data Preprocessing
 
-The project begins with a raw dataset of baby names in France (`dpt2020.csv`), which is thoroughly cleaned and transformed for analysis:
+We start from the raw file `dpt2020.csv` and perform several cleaning steps:
+- Remove rare or anonymized entries (`_PRENOMS_RARES`, `XXXX` years)
+- Convert columns into clean formats: `name`, `year`, `sex`, `dept`, `births`
+- Normalize department codes (e.g., “1” → “01”)
 
-- Rare and invalid entries (`_PRENOMS_RARES`, unknown years) are filtered out  
-- Columns are renamed and cast to appropriate types (`name`, `year`, `sex`, `dept`, `births`)  
-- Department codes are standardized using two-digit formatting
+From this process, two ready-to-use datasets are generated:
+- `baby_names_cleaned.csv` → includes department and gender, for geographic and demographic visuals
+- `baby_names_national.csv` → aggregated view across France, used for trend visualization
 
-Two datasets are generated and saved in the `data/` directory:
-
-- `baby_names_cleaned.csv`: cleaned data with full granularity (department + gender)
-- `baby_names_national.csv`: national-level aggregation, used for trend visualizations
-
-Utility filters (e.g. top 10, sudden changes, consistent names) are implemented in `utils/filters.py` and integrated directly into the app logic.
+Filter utilities are modularized under `utils/filters.py` and used across the app logic.
 
 ---
-## How to Run the Project
+
+## 💻 How to Run the Project Locally
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/zeinagebran/Baby-Names-Visualizations.git
 
-# 2. Launch the dashboard
-streamlit run "implementation_visu/app.py"
+# 2. Move into the project folder
+cd Baby-Names-Visualizations
 
-```
+# 3. Launch the Streamlit app
+streamlit run "implementation_visu/app.py"
