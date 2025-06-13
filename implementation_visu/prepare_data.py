@@ -1,31 +1,40 @@
-import pandas as pd
+import streamlit as st
+from visu1 import display_visualization_1
+# from visu2 import display_visualization_2
+# from visu3 import display_visualization_3
+import os
 
-# Load raw data
-df = pd.read_csv("data/dpt2020.csv", sep=";")
+# Dynamically detect correct data path
+if os.path.exists("data/baby_names_national.csv"):
+    DATA_PATH = "data"
+else:
+    DATA_PATH = "implementation_visu/data"
 
-# Filter invalid entries
-df = df[df['preusuel'] != "_PRENOMS_RARES"]
-df = df[df['annais'] != 'XXXX']
+# Store paths in session state for other modules
+st.session_state["NATIONAL_CSV"] = os.path.join(DATA_PATH, "baby_names_national.csv")
+st.session_state["CLEANED_CSV"] = os.path.join(DATA_PATH, "baby_names_cleaned.csv")
 
-# Clean column types
-df['year'] = df['annais'].astype(int)
-df['births'] = df['nombre'].astype(int)
-df['sex'] = df['sexe'].map({1: 'M', 2: 'F'})
-df['dept'] = df['dpt'].astype(str).str.zfill(2)
+st.set_page_config(layout="wide", page_title="Baby Names Dashboard")
 
-# Rename columns for clarity
-df = df.rename(columns={'preusuel': 'name'})
+st.sidebar.title("🧭 Navigation")
+page = st.sidebar.radio("Go to:", [
+    "🏠 Home",
+    "📈 Trends Over Time",
+    "🗺️ Map by Department",
+    "🚻 Gender Effect"
+])
 
-# Reorder columns for readability
-df = df[['name', 'year', 'sex', 'dept', 'births']]
+if page == "🏠 Home":
+    st.title("Welcome to the Baby Names Dashboard")
+    st.markdown("""
+    ### Explore baby name trends in France (1900–2020)
 
-# Save detailed dataset (used for dept-level map and gender analysis)
-df.to_csv("data/baby_names_cleaned.csv", index=False)
-
-# Aggregate for national view (no dept, but sex kept)
-national_df = df.groupby(['name', 'year', 'sex'], as_index=False)['births'].sum()
-national_df.to_csv("data/baby_names_national.csv", index=False)
-
-print("Files saved:")
-print("- data/baby_names_cleaned.csv (with dept and sex)")
-print("- data/baby_names_national.csv (aggregated without dept)")
+    Navigate through different views using the sidebar to analyze name popularity over time,
+    regional distribution, and gender-based patterns.
+    """)
+elif page == "📈 Trends Over Time":
+    display_visualization_1()
+elif page == "🗺️ Map by Department":
+    display_visualization_2()
+elif page == "🚻 Gender Effect":
+    display_visualization_3()

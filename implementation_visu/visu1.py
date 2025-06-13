@@ -7,7 +7,9 @@ from utils.filters import get_top_10_names, get_sudden_changes, get_consistent_n
 
 @st.cache_data
 def load_data():
-    return pd.read_csv("data/baby_names_national.csv")
+    csv_path = st.session_state.get(
+        "NATIONAL_CSV", "data/baby_names_national.csv")
+    return pd.read_csv(csv_path)
 
 
 def detect_peak_fact(name_df, name):

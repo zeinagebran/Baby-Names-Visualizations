@@ -1,7 +1,20 @@
-import streamlit as st
+import os
 from visu1 import display_visualization_1
+import streamlit as st
 # from visu2 import display_visualization_2
 # from visu3 import display_visualization_3
+
+# Dynamically detect correct data path
+if os.path.exists("data/baby_names_national.csv"):
+    DATA_PATH = "data"
+else:
+    DATA_PATH = "implementation_visu/data"
+
+# Store paths in session state for other modules
+st.session_state["NATIONAL_CSV"] = os.path.join(
+    DATA_PATH, "baby_names_national.csv")
+st.session_state["CLEANED_CSV"] = os.path.join(
+    DATA_PATH, "baby_names_cleaned.csv")
 
 st.set_page_config(layout="wide", page_title="Baby Names Dashboard")
 
