@@ -49,6 +49,6 @@ Utility filters (e.g. top 10, sudden changes, consistent names) are implemented 
 git clone https://github.com/zeinagebran/Baby-Names-Visualizations.git
 
 # 2. Launch the dashboard
-streamlit run "implementation visu/app.py"
+streamlit run "implementation_visu/app.py"
 
 ```
