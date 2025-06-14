@@ -7,8 +7,7 @@ from utils.filters import get_top_10_names, get_sudden_changes, get_consistent_n
 
 @st.cache_data
 def load_data():
-    csv_path = st.session_state.get(
-        "NATIONAL_CSV", "data/baby_names_national.csv")
+    csv_path = st.session_state["NATIONAL_CSV"]
     return pd.read_csv(csv_path)
 
 
@@ -20,8 +19,7 @@ def detect_peak_fact(name_df, name):
 def display_visualization_1():
     st.subheader("📈 Baby Name Trends in France (1900–2020)")
 
-    st.markdown(
-        """
+    st.markdown("""
         <style>
         div[data-baseweb="select"] > div > div:first-child {
             flex-wrap: wrap !important;
@@ -29,9 +27,7 @@ def display_visualization_1():
             overflow-y: auto;
         }
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 
     df = load_data()
 
@@ -43,7 +39,6 @@ def display_visualization_1():
         filter_mode = st.selectbox("🧮 Smart Filter:", [
             "None", "Top 10", "Sudden Changes", "Stable Names"])
 
-    # Apply gender filter
     if gender_filter == "Boys":
         df_filtered_gender = df[df["sex"] == "M"]
     elif gender_filter == "Girls":
@@ -51,7 +46,6 @@ def display_visualization_1():
     else:
         df_filtered_gender = df
 
-    # Apply smart filter
     if filter_mode == "Top 10":
         name_pool = get_top_10_names(df_filtered_gender)
     elif filter_mode == "Sudden Changes":
@@ -64,18 +58,15 @@ def display_visualization_1():
 
     name_pool_key = f"{gender_filter}_{filter_mode}"
 
-    # Reset selected names only if filter or gender changed
-    if ("last_name_pool_key" not in st.session_state
-            or st.session_state["last_name_pool_key"] != name_pool_key):
+    if ("last_name_pool_key" not in st.session_state or
+            st.session_state["last_name_pool_key"] != name_pool_key):
         st.session_state["last_name_pool_key"] = name_pool_key
         st.session_state["selected_names"] = random.sample(
             name_pool, min(10, len(name_pool)))
 
-    # Callback for synchro
     def on_multiselect_change():
         st.session_state["selected_names"] = st.session_state["selected_names_widget"]
 
-    # Format label with emoji
     def format_label(pair):
         name, sex = pair
         gender = "👦" if sex == "M" else "👧"
@@ -92,17 +83,14 @@ def display_visualization_1():
             on_change=on_multiselect_change
         )
 
-    # Check empty selection
     if not selected_pairs:
         st.info("Please select one or more names from the toolbar above.")
         return
 
-    # Filter data based on selected names
     filter_conditions = [(df["name"] == name) & (df["sex"] == sex)
                          for name, sex in selected_pairs]
     df_filtered = df[pd.concat(filter_conditions, axis=1).any(axis=1)]
 
-    # Plot chart
     fig = px.line(
         df_filtered,
         x="year",
@@ -116,7 +104,6 @@ def display_visualization_1():
     fig.update_layout(height=600, legend_title="Names")
     st.plotly_chart(fig, use_container_width=True)
 
-    # Display interesting facts
     st.markdown("### 🔍 Interesting facts")
     for name, sex in selected_pairs:
         name_df = df_filtered[(df_filtered["name"] == name)

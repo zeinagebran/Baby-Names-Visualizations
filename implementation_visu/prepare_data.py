@@ -1,40 +1,36 @@
-import streamlit as st
-from visu1 import display_visualization_1
-# from visu2 import display_visualization_2
-# from visu3 import display_visualization_3
+import pandas as pd
 import os
 
-# Dynamically detect correct data path
-if os.path.exists("data/baby_names_national.csv"):
-    DATA_PATH = "data"
+# Detect base directory
+if os.path.exists("data/dpt2020.csv"):
+    BASE_PATH = "data"
 else:
-    DATA_PATH = "implementation_visu/data"
+    BASE_PATH = "implementation_visu/data"
 
-# Store paths in session state for other modules
-st.session_state["NATIONAL_CSV"] = os.path.join(DATA_PATH, "baby_names_national.csv")
-st.session_state["CLEANED_CSV"] = os.path.join(DATA_PATH, "baby_names_cleaned.csv")
+RAW_CSV = os.path.join(BASE_PATH, "dpt2020.csv")
+CLEANED_CSV = os.path.join(BASE_PATH, "baby_names_cleaned.csv")
+NATIONAL_CSV = os.path.join(BASE_PATH, "baby_names_national.csv")
 
-st.set_page_config(layout="wide", page_title="Baby Names Dashboard")
+# Load raw data (must be original CSV, not Excel-edited)
+df = pd.read_csv(RAW_CSV, sep=";")
 
-st.sidebar.title("🧭 Navigation")
-page = st.sidebar.radio("Go to:", [
-    "🏠 Home",
-    "📈 Trends Over Time",
-    "🗺️ Map by Department",
-    "🚻 Gender Effect"
-])
+# Clean data
+df = df[df['preusuel'] != "_PRENOMS_RARES"]
+df = df[df['annais'] != 'XXXX']
+df['year'] = df['annais'].astype(int)
+df['births'] = df['nombre'].astype(int)
+df['sex'] = df['sexe'].map({1: 'M', 2: 'F'})
+df['dept'] = df['dpt'].astype(str).str.zfill(2)
+df = df.rename(columns={'preusuel': 'name'})
+df = df[['name', 'year', 'sex', 'dept', 'births']]
 
-if page == "🏠 Home":
-    st.title("Welcome to the Baby Names Dashboard")
-    st.markdown("""
-    ### Explore baby name trends in France (1900–2020)
+# Save cleaned full data
+df.to_csv(CLEANED_CSV, index=False)
 
-    Navigate through different views using the sidebar to analyze name popularity over time,
-    regional distribution, and gender-based patterns.
-    """)
-elif page == "📈 Trends Over Time":
-    display_visualization_1()
-elif page == "🗺️ Map by Department":
-    display_visualization_2()
-elif page == "🚻 Gender Effect":
-    display_visualization_3()
+# Save national-level aggregated version
+national_df = df.groupby(['name', 'year', 'sex'], as_index=False)[
+    'births'].sum()
+national_df.to_csv(NATIONAL_CSV, index=False)
+
+print("Cleaned dataset saved at:", CLEANED_CSV)
+print("National dataset saved at:", NATIONAL_CSV)
