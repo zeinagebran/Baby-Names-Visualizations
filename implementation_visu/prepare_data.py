@@ -23,6 +23,8 @@ df['sex'] = df['sexe'].map({1: 'M', 2: 'F'})
 df['dept'] = df['dpt'].astype(str).str.zfill(2)
 df = df.rename(columns={'preusuel': 'name'})
 df = df[['name', 'year', 'sex', 'dept', 'births']]
+# Sort by name, year, sex
+df = df.sort_values(by=["name", "year", "sex"])
 
 # Save cleaned full data
 df.to_csv(CLEANED_CSV, index=False)
