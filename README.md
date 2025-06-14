@@ -53,7 +53,9 @@ git clone https://github.com/zeinagebran/Baby-Names-Visualizations.git
 
 # 2. Move into the project folder
 cd Baby-Names-Visualizations
+
 # 3. Install dependencies
 pip install -r requirements.txt
+
 # 4. Launch the Streamlit app
 streamlit run "implementation_visu/app.py"
