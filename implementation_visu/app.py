@@ -2,7 +2,7 @@ import os
 from visu1 import display_visualization_1
 import streamlit as st
 # from visu2 import display_visualization_2
-# from visu3 import display_visualization_3
+from visu3 import display_visualization_3
 
 # Dynamically detect correct data path
 if os.path.exists("data/baby_names_national.csv"):
