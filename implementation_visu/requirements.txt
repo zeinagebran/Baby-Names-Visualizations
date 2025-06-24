@@ -3,3 +3,6 @@ pandas
 plotly
 numpy
 altair
+shapely
+wordcloud
+matplotlib

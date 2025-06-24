@@ -1,191 +1,227 @@
 import streamlit as st
 import pandas as pd
-import altair as alt
-import random
+import plotly.express as px
+import plotly.graph_objects as go
 
-COLOR = {"M": "#1f77b4", "F": "#e91e63"}
+color = {"M": "#1f77b4", "F": "#e91e63"}
+FILL = {
+    k: f"rgba({int(c[1:3], 16)}, {int(c[3:5], 16)}, {int(c[5:7], 16)},0.4)" for k, c in color.items()}
+
 
 @st.cache_data
-def load_data() -> pd.DataFrame:
-    return pd.read_csv(st.session_state["NATIONAL_CSV"])
+def load_data():
+    csv_path = st.session_state["NATIONAL_CSV"]
+    return pd.read_csv(csv_path)
 
 
-def peak_sentence(sub: pd.DataFrame) -> str:
-    row = sub.loc[sub["births"].idxmax()]
-    return (
-        f"📌 Peak in {int(row.year)}: {int(row.births)} births "
-        f"({'girls' if row.sex == 'F' else 'boys'})")
+def peaknote(df):
+    row = df.loc[df["births"].idxmax()]
+    return f"📌 Peak in {int(row.year)}: {int(row.births)} births ({'girls' if row.sex == 'F' else 'boys'})"
 
 
-def top_names(df: pd.DataFrame, sex: str) -> pd.DataFrame:
-    opp = "F" if sex == "M" else "M"
-    return (
-        df.groupby(["year", "name", "sex"])["births"].sum().unstack("sex", fill_value=0)
-        .assign(sel=lambda d: d[sex], oth=lambda d: d[opp]).groupby("year")
-        .apply(lambda g: g.nlargest(1, "sel")).reset_index(level=0, drop=True)
-        .rename(columns={sex: "selected_sex_births", opp: "other_sex_births"})
-        .assign(sex=sex).reset_index())
+def styled_caption(text):
+    st.markdown(f"<div style='margin-top: -15px; color: gray; font-size: 0.85em'>{text}</div>",
+                unsafe_allow_html=True)
 
 
-def top_unisex_names(df: pd.DataFrame) -> pd.DataFrame:
-    return (
-        df.groupby(["year", "name", "sex"], as_index=False)["births"]
-        .sum().pivot(index=["year", "name"], columns="sex", values="births")
-        .fillna(0).query("M>0 & F>0")
-        .assign(delta=lambda d: (d.M - d.F).abs(), total=lambda d: d.M + d.F).reset_index()
-        .sort_values(["year", "delta", "total"], ascending=[True, True, False]).groupby("year").first()
-        .rename(columns={"M": "male_births", "F": "female_births"}).reset_index())
-
-
-def main_charts(name_dict: dict[str, pd.DataFrame], names: list[str]) -> None:
-    n = len(names)
-    base_h, cols_per, rows = 280, 3, (n + 2) // 3
-
-    for r in range(rows):
-        cols = st.columns(cols_per)
-        for c in range(cols_per):
-            idx = r * cols_per + c
-            if idx >= n: break
-            name = names[idx]
-            sub = name_dict.get(name)
-            with cols[c]:
-                if sub.empty:
-                    st.warning(f"No data for {name}.")
-                    continue
-                if sub["year"].nunique() == 1:
-                    base = alt.Chart(sub).mark_bar(opacity=0.3, size=20)
-                else:
-                    base = alt.Chart(sub).mark_area(opacity=0.3, interpolate="monotone")
-
-                chart = (base.encode(
-                        x=alt.X("year:O", axis=alt.Axis(labelAngle=0, title=None)),
-                        y=alt.Y("births:Q", stack=None, title="Births"),
-                        color=alt.Color("sex:N",scale=alt.Scale(domain=["M", "F"], range=[COLOR["M"], COLOR["F"]]),
-                                        legend=alt.Legend(title="Gender", symbolType="circle")),
-                        tooltip=["year:O", "births:Q", "sex:N"])
-                         .properties(height=base_h, title=name).configure_axis(grid=False))
-                st.altair_chart(chart, use_container_width=True)
-                st.caption(peak_sentence(sub))
-
-
-def top5_list(df_src: pd.DataFrame, *, unisex: bool = False) -> list[str]:
-    if unisex:
-        agg = df_src.groupby("name").agg(
-            male_tot=("male_births", "sum"),
-            female_tot=("female_births", "sum"))
-        agg["delta"] = (agg["male_tot"] - agg["female_tot"]).abs()
-        return agg.sort_values("delta").head(5).index.tolist()
-    col = "selected_sex_births"
-    return df_src.groupby("name")[col].sum().sort_values(ascending=False).head(5).index.tolist()
-
-
-def fact_chart(df_fact: pd.DataFrame, title: str) -> alt.Chart:
-    recs = []
-    for _, row in df_fact.iterrows():
-        yr, nm = row["year"], row["name"]
-        if "selected_sex_births" in row:
-            dom = row["sex"]
-            recs.append({"year": yr, "name": nm, "births": row["selected_sex_births"], "sex": dom})
-            recs.append({"year": yr, "name": nm, "births": row["other_sex_births"], "sex": "F" if dom == "M" else "M"})
+def plot_multi_year(name, name_df):
+    fig = go.Figure()
+    years_unique = name_df["year"].nunique()
+    for sex in name_df["sex"].unique():
+        df_sex = name_df[name_df["sex"] == sex]
+        if years_unique == 1:
+            row = df_sex.iloc[0]
+            fig.add_trace(go.Scatter(
+                x=[row["year"], row["year"]],
+                y=[0, row["births"]],
+                mode="lines",
+                line=dict(color=FILL[sex], width=2),
+                name=sex,
+                showlegend=True))
+            fig.add_trace(go.Scatter(
+                x=[row["year"]],
+                y=[row["births"]],
+                mode="markers",
+                marker=dict(size=6, color=FILL[sex]),
+                name="",
+                showlegend=False))
         else:
-            recs.append({"year": yr, "name": nm, "births": row["male_births"], "sex": "M"})
-            recs.append({"year": yr, "name": nm, "births": row["female_births"], "sex": "F"})
+            fig.add_trace(go.Scatter(
+                x=df_sex["year"],
+                y=df_sex["births"],
+                mode="lines+markers",
+                marker=dict(size=2, color=color[sex], opacity=0.2),
+                line=dict(color=color[sex], width=1.5),
+                fill="tozeroy",
+                fillcolor=FILL.get(sex),
+                name=sex,
+                showlegend=True))
+    fig.update_layout(
+        title=name,
+        height=400,
+        legend_title="Gender",
+        yaxis_title="Births")
+    if years_unique == 1:
+        year = name_df["year"].iloc[0]
+        fig.update_layout(xaxis=dict(tickmode='array', tickvals=[year]))
 
-    long = pd.DataFrame(recs)
-    return (alt.Chart(long).mark_bar(opacity=0.8).encode(
-            x=alt.X("year:O", axis=alt.Axis(labelAngle=0, title=None)),
-            y="births:Q",
-            color=alt.Color("sex:N", scale=alt.Scale(domain=["M", "F"], range=[COLOR["M"], COLOR["F"]]),
-                            legend=alt.Legend(title="Gender")),
-            tooltip=["year:O", "name:N", "births:Q", "sex:N"])
-        .properties(height=320, title=title).configure_axis(grid=False))
-    
-def calc_top10_share(g):
-    top10 = g.nlargest(10, "births")["births"].sum()
-    total = g["births"].sum()
-    return pd.Series({"share": top10 / total})
+    return fig
+
+
+def main_charts(name_dict, names):
+    if not names:
+        df = load_data()
+        area_df = df.groupby(["year", "sex"])["births"].sum().reset_index()
+        fig = go.Figure()
+        for sex in ["F", "M"]:
+            sub_df = area_df[area_df["sex"] == sex]
+            fig.add_trace(go.Scatter(x=sub_df["year"], y=sub_df["births"],
+                                     mode="lines", name=sex,
+                                     line=dict(shape="spline",
+                                               width=2, color=color[sex]),
+                                     fill="tozeroy", fillcolor=FILL[sex]))
+        fig.update_layout(title="Overall Birth Trends by Gender",
+                          xaxis_title="Year", yaxis_title="Births",
+                          legend_title="Gender",
+                          height=400, hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True)
+        return
+
+    num = len(names)
+    cols = st.columns(min(num, 3))
+    for i, name in enumerate(names):
+        df_raw = name_dict.get(name)
+        if df_raw is None or df_raw.empty:
+            continue
+        df = df_raw[df_raw["births"] > 0]
+        if df.empty:
+            st.warning(f"⚠️ No data to display for **{name}**.")
+            continue
+
+        with cols[i % len(cols)]:
+            fig = plot_multi_year(name, df)
+            st.plotly_chart(fig, use_container_width=True)
+            styled_caption(peaknote(df))
+
+
+def get_smart_filter_names(df, top_n=10):
+    grouped = df.groupby(["name", "sex"])["births"].sum().unstack().fillna(0)
+    grouped["total"] = grouped["M"] + grouped["F"]
+    grouped["min_count"] = grouped[["M", "F"]].min(axis=1)
+
+    filtered = grouped[(grouped["M"] >= 1000) & (grouped["F"] >= 1000)].copy()
+    filtered["ratio_diff"] = abs(filtered["M"] / filtered["total"] - 0.5)
+    top_unisex = (filtered.sort_values(["ratio_diff", "total"], ascending=[True, False])
+                  .head(top_n).index.tolist())
+
+    top_boys = grouped[grouped["M"] > 0].sort_values(
+        "M", ascending=False).head(top_n).index.tolist()
+    top_girls = grouped[grouped["F"] > 0].sort_values(
+        "F", ascending=False).head(top_n).index.tolist()
+
+    return top_boys, top_girls, top_unisex
 
 
 def display_visualization_3():
     st.subheader("🚻 Baby Name Gender Effect in France (1900-2020)")
-    st.markdown("""
+
+    st.markdown(
+        """
         <style>
         div[data-baseweb="select"] > div > div:first-child {
             flex-wrap: wrap !important;
             max-height: 150px;
             overflow-y: auto;
         }
-        """,unsafe_allow_html=True,)
+        </style>
+        """,
+        unsafe_allow_html=True)
 
     df = load_data()
+
     if "name_dict" not in st.session_state:
         st.session_state["name_dict"] = {
             n: g.reset_index(drop=True) for n, g in df.groupby("name")
         }
-    name_dict = st.session_state["name_dict"] 
-    
-    name_pool = sorted(df["name"].unique())
-    if "selected_names" not in st.session_state:
-        st.session_state["selected_names"] = random.sample(
-            name_pool, min(4, len(name_pool)))
+    name_dict = st.session_state["name_dict"]
+    # 👇 Check if a name was passed from Visu1
+    preselect = st.session_state.pop("selected_name_for_visu3", None)
+    if preselect:
+        if isinstance(preselect, str):
+            preselect = [preselect]
+        current = st.session_state.get("selected_names3_input", [])
+        st.session_state["smart_choice"] = "None"
+        st.session_state["selected_names3_input"] = list(
+            set(preselect + current))
 
+    pool = sorted(df["name"].unique())
+
+    st.session_state.setdefault("smart_choice", "None")
+    st.session_state.setdefault("top_n", 10)
+    st.session_state.setdefault("selected_names3_input", [])
+
+    smart_options = [
+        "None",
+        "👦 Most Popular Boy Names",
+        "👧 Most Popular Girl Names",
+        "🚻 Most Gender-Neutral Names"]
+
+    smart_choice = st.selectbox(
+        "🧮 Smart filter:",
+        smart_options,
+        index=smart_options.index(st.session_state["smart_choice"]))
+
+    if smart_choice != "None":
+        top_n = st.slider(
+            "Select number of names to display in Smart Filter",
+            min_value=5,
+            max_value=30,
+            value=st.session_state["top_n"])
+        top_boys, top_girls, top_unisex = get_smart_filter_names(
+            df, top_n=top_n)
+
+        if (
+            smart_choice != st.session_state["smart_choice"]
+            or top_n != st.session_state["top_n"]
+        ):
+            st.session_state["smart_choice"] = smart_choice
+            st.session_state["top_n"] = top_n
+
+            if smart_choice == "👦 Most Popular Boy Names":
+                suggestions = top_boys[:top_n]
+            elif smart_choice == "👧 Most Popular Girl Names":
+                suggestions = top_girls[:top_n]
+            elif smart_choice == "🚻 Most Gender-Neutral Names":
+                suggestions = top_unisex[:top_n]
+            else:
+                suggestions = []
+
+            st.session_state["smart_suggestions"] = suggestions
+            st.session_state["selected_names3_input"] = suggestions
+            st.rerun()
     selected = st.multiselect(
-        label=" ",
-        options=name_pool,
-        key="selected_names",
+        " ",
+        pool,
+        default=st.session_state["selected_names3_input"],
+        key="selected_names3_input",
+        placeholder="Choose names",
         label_visibility="collapsed")
 
-    if not selected:
-        st.info("👆 Select at least one name to display its trajectory.")
-        return
+    if st.session_state["smart_choice"] != "None":
+        suggestions_current = st.session_state.get("smart_suggestions", [])
+        if any(name not in suggestions_current for name in selected):
+            st.session_state["smart_choice"] = "None"
+            st.rerun()
+
+    if len(selected) == 0 and smart_choice != "None":
+        st.session_state["smart_choice"] = "None"
+        st.session_state["top_n"] = 10
+        st.rerun()
+
+    if smart_choice != "None":
+        current_len = len(st.session_state["selected_names3_input"])
+        if current_len < st.session_state["top_n"]:
+            st.session_state["top_n"] = current_len
+            st.rerun()
 
     main_charts(name_dict, selected)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("### 🔍 Interesting facts")
-    
-    year_sex_total = df.groupby(["year", "sex"])["births"].sum().reset_index()
-    year_sex_name = df.groupby(["year", "sex", "name"])["births"].sum().reset_index()
-
-    top10_share = year_sex_name.groupby(["year", "sex"]).apply(calc_top10_share).reset_index()
-    
-    area_total = (alt.Chart(year_sex_total)
-        .mark_area(interpolate="monotone", opacity=0.5).encode(
-            x="year:O",
-            y=alt.Y("births:Q", stack=None, title="Births"),
-            color=alt.Color("sex:N", scale=alt.Scale(domain=["M","F"], range=[COLOR["M"], COLOR["F"]]),
-                            legend=alt.Legend(title="Gender")))
-        .properties(height=320, title="Total births by sex"))
-
-    line_share = (alt.Chart(top10_share)
-        .mark_line(interpolate="monotone").encode(
-            x="year:O",
-            y=alt.Y("share:Q", axis=alt.Axis(format="%"), title="Top-10 share"),
-            color=alt.Color("sex:N", scale=alt.Scale(domain=["M","F"], range=[COLOR["M"], COLOR["F"]]),
-                            legend=alt.Legend(title="Gender")))
-        .properties(height=320, title="Name diversity (Top-10 share)"))
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.altair_chart(area_total, use_container_width=True)
-    with col2:
-        st.altair_chart(line_share, use_container_width=True)
-    
-    male_top = top_names(df, "M")
-    female_top = top_names(df, "F")
-    unisex_top = top_unisex_names(df)
-
-    facts = [(male_top, "Most-used boy names", top5_list(male_top)),
-        (female_top, "Most-used girl names", top5_list(female_top)),
-        (unisex_top, "Most-used unisex names", top5_list(unisex_top, unisex=True))]
-    
-    cols = st.columns(3)
-    for col, (df_fact, title, topn) in zip(cols, facts):
-        with col:
-            st.altair_chart(fact_chart(df_fact, title), use_container_width=True)
-            if topn:
-                st.markdown(
-                    "<b>🌟Top 5 popular names overall:</b><br>"
-                    + "<br>".join(f"{i + 1}. {n}" for i, n in enumerate(topn)),
-                    unsafe_allow_html=True)
-

@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -47,11 +48,23 @@ def display_visualization_1():
         df_filtered_gender = df
 
     if filter_mode == "Top 10":
-        name_pool = get_top_10_names(df_filtered_gender)
-    elif filter_mode == "Sudden Changes":
-        name_pool = get_sudden_changes(df_filtered_gender)
+        top_10_data = get_top_10_names(df_filtered_gender)
+        name_pool = [(name, sex) for name, sex, _ in top_10_data]
+        top_10_total_lookup = {
+            (name, sex): total for name, sex, total in top_10_data}
+
     elif filter_mode == "Stable Names":
-        name_pool = get_consistent_names(df_filtered_gender)
+        stable_name_std_list = get_consistent_names(df_filtered_gender)
+        name_pool = [item[0]
+                     for item in stable_name_std_list]  # just the (name, sex)
+        stable_std_lookup = dict(stable_name_std_list)  # {(name, sex): std}
+
+    elif filter_mode == "Sudden Changes":
+        sudden_change_data = get_sudden_changes(df_filtered_gender)
+        name_pool = [(name, sex) for name, sex, _ in sudden_change_data]
+        sudden_change_lookup = {
+            (name, sex): change for name, sex, change in sudden_change_data}
+
     else:
         name_pool = df_filtered_gender[["name", "sex"]].drop_duplicates().apply(
             tuple, axis=1).tolist()
@@ -87,9 +100,10 @@ def display_visualization_1():
         st.info("Please select one or more names from the toolbar above.")
         return
 
-    filter_conditions = [(df["name"] == name) & (df["sex"] == sex)
+    filter_conditions = [(df_filtered_gender["name"] == name) & (df_filtered_gender["sex"] == sex)
                          for name, sex in selected_pairs]
-    df_filtered = df[pd.concat(filter_conditions, axis=1).any(axis=1)]
+    df_filtered = df_filtered_gender[pd.concat(
+        filter_conditions, axis=1).any(axis=1)]
 
     fig = px.line(
         df_filtered,
@@ -104,14 +118,62 @@ def display_visualization_1():
     fig.update_layout(height=600, legend_title="Names")
     st.plotly_chart(fig, use_container_width=True)
 
+    # Subtle legend explanation in small text just below the chart
+    st.markdown("""
+    <div style="font-size: 0.85em; color: gray; margin-top: -10px;">
+        <em>Legend tip:</em> Dashed lines = <strong>Feminine (F)</strong>, Solid lines = <strong>Masculine (M)</strong>.
+        If only one gender is selected, all lines use a single style.
+    </div>
+    """, unsafe_allow_html=True)
+
     st.markdown("### 🔍 Interesting facts")
+
     for name, sex in selected_pairs:
         name_df = df_filtered[(df_filtered["name"] == name)
                               & (df_filtered["sex"] == sex)]
         gender_label = "boy" if sex == "M" else "girl"
-        if filter_mode == "Stable Names":
-            st.markdown(
-                f"**{name} ({gender_label})**: 📊 Consistently used over the years.")
+
+        base_fact = f"**{name} ({gender_label})**: {detect_peak_fact(name_df, name)}"
+
+        if filter_mode == "Top 10":
+            total = top_10_total_lookup.get((name, sex), None)
+            if total is not None:
+                st.markdown(f"{base_fact} Total births: `{total:,}`.")
+            else:
+                st.markdown(base_fact)
+
+        elif filter_mode == "Sudden Changes":
+            change = sudden_change_lookup.get((name, sex), None)
+            if change is not None:
+                st.markdown(
+                    f"{base_fact} 📈 Sudden change detected — max year-over-year difference: `{int(change):,}` births.")
+            else:
+                st.markdown(base_fact)
+
+        elif filter_mode == "Stable Names":
+            std_val = stable_std_lookup.get((name, sex), None)
+            if std_val is not None:
+                st.markdown(
+                    f"{base_fact} 📊 Consistently used — standard deviation: `{std_val:.2f}`.")
+            else:
+                st.markdown(base_fact)
+
         else:
-            st.markdown(
-                f"**{name} ({gender_label})**: {detect_peak_fact(name_df, name)}")
+            st.markdown(base_fact)
+
+        with st.expander(f"🔎 Explore more about {name}"):
+            st.markdown("What would you like to explore?")
+
+            col1, col2 = st.columns(2)
+
+            if col1.button(f"📍 Regional Map ({name})", key=f"map_{name}_{sex}"):
+
+                st.session_state.selected_name_for_visu2 = name
+                st.session_state.page_redirect = "🗺️ Map by Department"
+                st.rerun()
+
+            if col2.button(f"🚻 Gender Effect ({name})", key=f"gender_{name}_{sex}"):
+
+                st.session_state.selected_name_for_visu3 = name
+                st.session_state.page_redirect = "🚻 Gender Effect"
+                st.rerun()
