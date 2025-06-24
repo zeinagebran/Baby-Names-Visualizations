@@ -125,8 +125,7 @@ def get_smart_filter_names(df, top_n=10):
 def display_visualization_3():
     st.subheader("🚻 Baby Name Gender Effect in France (1900-2020)")
 
-    st.markdown(
-        """
+    st.markdown("""
         <style>
         div[data-baseweb="select"] > div > div:first-child {
             flex-wrap: wrap !important;
@@ -134,51 +133,55 @@ def display_visualization_3():
             overflow-y: auto;
         }
         </style>
-        """,
-        unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
     df = load_data()
 
+    # Initialize session state cleanly
+    st.session_state.setdefault("selected_names3_input", [])
+    st.session_state.setdefault("smart_choice", "None")
+    st.session_state.setdefault("top_n", 10)
+
+    # Load or cache name dictionary
     if "name_dict" not in st.session_state:
         st.session_state["name_dict"] = {
             n: g.reset_index(drop=True) for n, g in df.groupby("name")
         }
     name_dict = st.session_state["name_dict"]
-    # 👇 Check if a name was passed from Visu1
+
+    # Handle navigation from Visu1
     preselect = st.session_state.pop("selected_name_for_visu3", None)
     if preselect:
         if isinstance(preselect, str):
             preselect = [preselect]
-        current = st.session_state.get("selected_names3_input", [])
         st.session_state["smart_choice"] = "None"
-        st.session_state["selected_names3_input"] = list(
-            set(preselect + current))
+        st.session_state["selected_names3_input"] = list(set(preselect))
 
-    pool = sorted(df["name"].unique())
-
-    st.session_state.setdefault("smart_choice", "None")
-    st.session_state.setdefault("top_n", 10)
-    st.session_state.setdefault("selected_names3_input", [])
+    name_pool = sorted(df["name"].unique())
 
     smart_options = [
         "None",
         "👦 Most Popular Boy Names",
         "👧 Most Popular Girl Names",
-        "🚻 Most Gender-Neutral Names"]
+        "🚻 Most Gender-Neutral Names"
+    ]
 
     smart_choice = st.selectbox(
         "🧮 Smart filter:",
         smart_options,
-        index=smart_options.index(st.session_state["smart_choice"]))
+        index=smart_options.index(st.session_state["smart_choice"])
+    )
 
+    # Smart filter applied
     if smart_choice != "None":
         top_n = st.slider(
             "Select number of names to display in Smart Filter",
             min_value=5,
             max_value=30,
-            value=st.session_state["top_n"])
-        top_boys, top_girls, top_unisex = get_smart_filter_names(
-            df, top_n=top_n)
+            value=st.session_state["top_n"]
+        )
+
+        top_boys, top_girls, top_unisex = get_smart_filter_names(df, top_n)
 
         if (
             smart_choice != st.session_state["smart_choice"]
@@ -199,29 +202,35 @@ def display_visualization_3():
             st.session_state["smart_suggestions"] = suggestions
             st.session_state["selected_names3_input"] = suggestions
             st.rerun()
+
+    # Main name selection widget
     selected = st.multiselect(
         " ",
-        pool,
-        default=st.session_state["selected_names3_input"],
+        name_pool,
         key="selected_names3_input",
         placeholder="Choose names",
-        label_visibility="collapsed")
+        label_visibility="collapsed"
+    )
 
+    # Reset smart filter if manual selection diverges
     if st.session_state["smart_choice"] != "None":
-        suggestions_current = st.session_state.get("smart_suggestions", [])
-        if any(name not in suggestions_current for name in selected):
+        valid = st.session_state.get("smart_suggestions", [])
+        if any(name not in valid for name in selected):
             st.session_state["smart_choice"] = "None"
             st.rerun()
 
-    if len(selected) == 0 and smart_choice != "None":
+    # Reset if list is cleared
+    if not selected and st.session_state["smart_choice"] != "None":
         st.session_state["smart_choice"] = "None"
         st.session_state["top_n"] = 10
         st.rerun()
 
-    if smart_choice != "None":
-        current_len = len(st.session_state["selected_names3_input"])
-        if current_len < st.session_state["top_n"]:
-            st.session_state["top_n"] = current_len
+    # Adjust top_n down if fewer results remain
+    if st.session_state["smart_choice"] != "None":
+        if len(st.session_state["selected_names3_input"]) < st.session_state["top_n"]:
+            st.session_state["top_n"] = len(
+                st.session_state["selected_names3_input"])
             st.rerun()
 
+    # Render main charts
     main_charts(name_dict, selected)
