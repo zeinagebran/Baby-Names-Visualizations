@@ -73,7 +73,7 @@ def display_visualization_2():
 
         with inner_mid:
             year_str = st.text_input(
-                "", 
+                label="Year",
                 value=str(st.session_state.year),
                 max_chars=4,
                 key="year_text",
