@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import json
 import shapely.geometry as geom
 from wordcloud import WordCloud
@@ -8,19 +7,12 @@ from io import BytesIO
 import base64
 import folium
 from streamlit_folium import folium_static
-from branca.element import MacroElement
-from jinja2 import Template
-from streamlit.components.v1 import html
 import unicodedata
-
-
-
 
 @st.cache_data
 def load_geojson():
     with open("implementation_visu/data/departments.geojson", "r", encoding="utf-8") as f:
         return json.load(f)
-
 
 def make_wordcloud_base64(word_freqs, width=180, height=100, padding_factor=0.75, max_font=80):
     width = int(width * padding_factor)
@@ -43,15 +35,11 @@ def make_wordcloud_base64(word_freqs, width=180, height=100, padding_factor=0.75
     img.save(buffer, format="PNG")
     return base64.b64encode(buffer.getvalue()).decode()
 
-
-
-
 def normalize_text(text):
     return ''.join(
         c for c in unicodedata.normalize('NFKD', text)
         if not unicodedata.combining(c)
     ).lower()
-
 
 def display_visualization_2():
 
@@ -63,14 +51,14 @@ def display_visualization_2():
     if "year" not in st.session_state:
         st.session_state.year = 2020
 
-    spacer_l, col_left, col_center, col_right, spacer_r = st.columns([1, 1, 6, 1, 1])
+    spacer_l, col_left, col_center, col_right, spacer_r = st.columns([1,1,6,1,1])
 
     with col_left:
         if st.button("←"):
             st.session_state.year = max(min_year, st.session_state.year - 1)
 
     with col_center:
-        inner_l, inner_mid, inner_r = st.columns([1, 2, 1])
+        inner_l, inner_mid, inner_r = st.columns([1,2,1])
         with inner_mid:
             year_str = st.text_input(
                 label="Year",
@@ -94,56 +82,39 @@ def display_visualization_2():
 
     selected_year = st.session_state.year
 
-    # --- Here is the key part for selected_name from Visu1 ---
+    # Handle incoming selected name from Visu1
     incoming_selected_name = st.session_state.pop("selected_name_for_visu2", None)
 
-    # Initialize or update the name filter state accordingly
     if incoming_selected_name:
-        # Set the text input to this incoming name
         st.session_state["selected_name_visu2"] = incoming_selected_name
     elif "selected_name_visu2" not in st.session_state:
-        # Initialize if not present
         st.session_state["selected_name_visu2"] = ""
 
-    # Gender and Name filters UI
-    colA, colB = st.columns([1, 3])
+    colA, colB = st.columns([1,3])
     with colA:
         gender_filter = st.radio("Gender:", ["All", "Boys", "Girls"], horizontal=True)
     with colB:
         name_filter = st.text_input(
-            "🔎 Type a name to focus (optional):",
+            "🔎 Type a name to focus:",
             value=st.session_state["selected_name_visu2"],
             key="selected_name_visu2",
             placeholder="e.g., Marie"
         )
 
-    # Filter df_year by year
     df_year = df[df["year"] == selected_year]
 
-    # Gender filter
     if gender_filter == "Boys":
         df_year = df_year[df_year["sex"] == "M"]
     elif gender_filter == "Girls":
         df_year = df_year[df_year["sex"] == "F"]
 
-    # Normalize function (for accents-insensitive comparison)
-    import unicodedata
-    def normalize_text(text):
-        return ''.join(
-            c for c in unicodedata.normalize('NFKD', text)
-            if not unicodedata.combining(c)
-        ).lower()
-
-    # Name filter (normalize & exact match)
     if name_filter and name_filter.strip() != "":
         normalized_input = normalize_text(name_filter.strip())
         df_year = df_year[df_year["name"].apply(lambda n: normalize_text(n) == normalized_input)]
-
         if df_year.empty:
             st.warning(f"No data found for name '{name_filter}' in {selected_year}.")
             return
 
-    # Handle dept_births column if any
     if "dept_births" in df_year.columns:
         df_year[["dept", "births"]] = df_year["dept_births"].str.split(",", expand=True)
         df_year = df_year.astype({"dept": "int", "births": "int"})
@@ -151,7 +122,6 @@ def display_visualization_2():
 
     geojson = load_geojson()
 
-    # Group data
     grp = (
         df_year.groupby(["dept", "name", "sex"], as_index=False)["births"]
         .sum()
@@ -184,27 +154,28 @@ def display_visualization_2():
         dept_codes.append(code)
         dept_hovers.append(hover_text)
 
-    outline_df = pd.DataFrame({
-        "code": dept_codes,
-        "val": [1] * len(dept_codes),
-        "hover": dept_hovers
-    })
+    m = folium.Map(location=[46.5, 1.4], zoom_start=6, tiles="CartoDB positron")
 
-    chor = go.Choroplethmapbox(
-        geojson=geojson,
-        locations=outline_df.code,
-        z=outline_df.val,
-        featureidkey="properties.code",
-        colorscale=[[0, "white"], [1, "white"]],
-        showscale=False,
-        marker_line_color="black",
-        marker_line_width=0.6,
-        hovertext=outline_df.hover,
-        hoverinfo="text"
-    )
+    def style_function(feature):
+        return {
+            "fillOpacity": 0.0,
+            "weight": 1,
+            "color": "black"
+        }
+
+    for feat in geojson["features"]:
+        code = feat["properties"]["code"]
+        name_dep = feat["properties"].get("nom", code)
+
+        tooltip_html = next((hover for c, hover in zip(dept_codes, dept_hovers) if c == code), name_dep)
+
+        folium.GeoJson(
+            feat,
+            style_function=style_function,
+            tooltip=tooltip_html
+        ).add_to(m)
 
     map_layers = []
-
     for feat in geojson["features"]:
         code = feat["properties"]["code"]
         poly = geom.shape(feat["geometry"])
@@ -256,16 +227,20 @@ def display_visualization_2():
             "opacity": 1.0
         })
 
-    fig = go.Figure(chor)
-    fig.update_layout(
-        mapbox=dict(
-            style="carto-positron",
-            zoom=5.5,
-            center={"lat": 46.5, "lon": 1.4},
-            layers=map_layers
-        ),
-        margin=dict(t=0, l=0, r=0, b=0),
-        height=750
-    )
+    for layer in map_layers:
+        image_url = layer["source"]
+        coords = layer["coordinates"]
+        bounds = [
+            [coords[2][1], coords[0][0]],
+            [coords[0][1], coords[2][0]]
+        ]
 
-    st.plotly_chart(fig, use_container_width=True)
+        folium.raster_layers.ImageOverlay(
+            image=image_url,
+            bounds=bounds,
+            opacity=layer["opacity"],
+            interactive=True,
+            zindex=500,
+        ).add_to(m)
+
+    folium_static(m, width=1000, height=750)
