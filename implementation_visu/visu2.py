@@ -6,6 +6,14 @@ import shapely.geometry as geom
 from wordcloud import WordCloud
 from io import BytesIO
 import base64
+import folium
+from streamlit_folium import folium_static
+from branca.element import MacroElement
+from jinja2 import Template
+from streamlit.components.v1 import html
+import unicodedata
+
+
 
 
 @st.cache_data
@@ -36,30 +44,24 @@ def make_wordcloud_base64(word_freqs, width=180, height=100, padding_factor=0.75
     return base64.b64encode(buffer.getvalue()).decode()
 
 
+
+
+def normalize_text(text):
+    return ''.join(
+        c for c in unicodedata.normalize('NFKD', text)
+        if not unicodedata.combining(c)
+    ).lower()
+
+
 def display_visualization_2():
+
     st.subheader("🗺️ Most Popular Baby Names by Department (2020)")
-
-    # --- at top of your display_visualization_2(), before `df = pd.read_csv(…)` ---
-
-
-
-    # 🔧 Handle dynamic input from Visu1
-    selected_name = st.session_state.pop("selected_name_for_visu2", None)
-
-    if selected_name is None:
-        st.info("Each department shows a word cloud of its top 5 names.")
-    else:
-        st.success(f"Showing regional popularity for **{selected_name}**")
-
-    topN = 5
 
     df = pd.read_csv(st.session_state["CLEANED_CSV"])
 
-    
     min_year, max_year = int(df["year"].min()), int(df["year"].max())
-
-    if 'year' not in st.session_state:
-        st.session_state.year = 2020  
+    if "year" not in st.session_state:
+        st.session_state.year = 2020
 
     spacer_l, col_left, col_center, col_right, spacer_r = st.columns([1, 1, 6, 1, 1])
 
@@ -68,18 +70,15 @@ def display_visualization_2():
             st.session_state.year = max(min_year, st.session_state.year - 1)
 
     with col_center:
-       
         inner_l, inner_mid, inner_r = st.columns([1, 2, 1])
-
         with inner_mid:
             year_str = st.text_input(
                 label="Year",
                 value=str(st.session_state.year),
                 max_chars=4,
                 key="year_text",
-                label_visibility="collapsed"  
+                label_visibility="collapsed",
             )
-          
             if year_str.isdigit():
                 y = int(year_str)
                 if min_year <= y <= max_year:
@@ -93,30 +92,73 @@ def display_visualization_2():
         if st.button("→"):
             st.session_state.year = min(max_year, st.session_state.year + 1)
 
-  
     selected_year = st.session_state.year
-    ##st.markdown(f"### Showing results for **{selected_year}**")
+
+    # --- Here is the key part for selected_name from Visu1 ---
+    incoming_selected_name = st.session_state.pop("selected_name_for_visu2", None)
+
+    # Initialize or update the name filter state accordingly
+    if incoming_selected_name:
+        # Set the text input to this incoming name
+        st.session_state["selected_name_visu2"] = incoming_selected_name
+    elif "selected_name_visu2" not in st.session_state:
+        # Initialize if not present
+        st.session_state["selected_name_visu2"] = ""
+
+    # Gender and Name filters UI
+    colA, colB = st.columns([1, 3])
+    with colA:
+        gender_filter = st.radio("Gender:", ["All", "Boys", "Girls"], horizontal=True)
+    with colB:
+        name_filter = st.text_input(
+            "🔎 Type a name to focus (optional):",
+            value=st.session_state["selected_name_visu2"],
+            key="selected_name_visu2",
+            placeholder="e.g., Marie"
+        )
+
+    # Filter df_year by year
     df_year = df[df["year"] == selected_year]
 
+    # Gender filter
+    if gender_filter == "Boys":
+        df_year = df_year[df_year["sex"] == "M"]
+    elif gender_filter == "Girls":
+        df_year = df_year[df_year["sex"] == "F"]
 
-    if "dept_births" in df.columns:
-        df[["dept", "births"]] = df["dept_births"].str.split(",", expand=True)
-        df = df.astype({"dept": "int", "births": "int"})
-        df.drop(columns=["dept_births"], inplace=True)
+    # Normalize function (for accents-insensitive comparison)
+    import unicodedata
+    def normalize_text(text):
+        return ''.join(
+            c for c in unicodedata.normalize('NFKD', text)
+            if not unicodedata.combining(c)
+        ).lower()
 
-    if selected_name:
-        df = df[df["name"].str.lower() == selected_name.lower()]
+    # Name filter (normalize & exact match)
+    if name_filter and name_filter.strip() != "":
+        normalized_input = normalize_text(name_filter.strip())
+        df_year = df_year[df_year["name"].apply(lambda n: normalize_text(n) == normalized_input)]
+
+        if df_year.empty:
+            st.warning(f"No data found for name '{name_filter}' in {selected_year}.")
+            return
+
+    # Handle dept_births column if any
+    if "dept_births" in df_year.columns:
+        df_year[["dept", "births"]] = df_year["dept_births"].str.split(",", expand=True)
+        df_year = df_year.astype({"dept": "int", "births": "int"})
+        df_year.drop(columns=["dept_births"], inplace=True)
 
     geojson = load_geojson()
-    df2020 = df[df["year"] == selected_year]
 
+    # Group data
     grp = (
-        df2020
-        .groupby(["dept", "name", "sex"], as_index=False)["births"]
+        df_year.groupby(["dept", "name", "sex"], as_index=False)["births"]
         .sum()
     )
     grp["code"] = grp["dept"].apply(lambda d: f"{d:02d}")
 
+    topN = 5
     dept_hovers = []
     dept_codes = []
 
