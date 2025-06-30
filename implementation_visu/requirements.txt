@@ -4,5 +4,6 @@ plotly
 numpy
 altair
 shapely
+folium
 wordcloud
 matplotlib
