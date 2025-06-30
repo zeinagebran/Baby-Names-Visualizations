@@ -7,3 +7,4 @@ shapely
 folium
 wordcloud
 matplotlib
+streamlit_folium
